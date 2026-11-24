@@ -117,7 +117,7 @@ public class Principal extends javax.swing.JFrame {
         panelCentro.setLayout(new java.awt.BorderLayout(5, 5));
 
         panelTitulo.setBackground(new java.awt.Color(255, 255, 255));
-        panelTitulo.setLayout(new java.awt.GridLayout());
+        panelTitulo.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado1.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado1.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -139,7 +139,7 @@ public class Principal extends javax.swing.JFrame {
         panelIzquierdo.setLayout(new java.awt.BorderLayout(5, 5));
 
         panelTiempo.setBackground(new java.awt.Color(236, 255, 211));
-        panelTiempo.setLayout(new java.awt.GridLayout());
+        panelTiempo.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado5.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado5.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -178,7 +178,7 @@ public class Principal extends javax.swing.JFrame {
 
         panelMapa.setBackground(new java.awt.Color(236, 255, 211));
         panelMapa.setForeground(new java.awt.Color(0, 0, 0));
-        panelMapa.setLayout(new java.awt.GridLayout());
+        panelMapa.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado6.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado6.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
@@ -188,7 +188,7 @@ public class Principal extends javax.swing.JFrame {
 
         jPanel16.setBackground(new java.awt.Color(255, 255, 255));
         jPanel16.setOpaque(false);
-        jPanel16.setLayout(new java.awt.GridLayout());
+        jPanel16.setLayout(new java.awt.GridLayout(1, 0));
 
         jLabel6.setFont(new java.awt.Font("Nunito", 1, 22)); // NOI18N
         jLabel6.setForeground(new java.awt.Color(105, 84, 80));
@@ -209,7 +209,7 @@ public class Principal extends javax.swing.JFrame {
 
         panelCentral.setBackground(new java.awt.Color(236, 255, 211));
         panelCentral.setPreferredSize(new java.awt.Dimension(650, 650));
-        panelCentral.setLayout(new java.awt.GridLayout());
+        panelCentral.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado2.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado2.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
@@ -224,7 +224,7 @@ public class Principal extends javax.swing.JFrame {
         panelDerecho.setLayout(new java.awt.BorderLayout(0, 8));
 
         panelEstado.setBackground(new java.awt.Color(236, 255, 211));
-        panelEstado.setLayout(new java.awt.GridLayout());
+        panelEstado.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado13.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado13.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
@@ -443,7 +443,7 @@ public class Principal extends javax.swing.JFrame {
 
         panelRedondeado4.add(panelRedondeado8);
 
-        jPanel2.setLayout(new java.awt.GridLayout());
+        jPanel2.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado9.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado9.setColorFondo(new java.awt.Color(255, 255, 255));
@@ -510,7 +510,7 @@ public class Principal extends javax.swing.JFrame {
         panelRedondeado7.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
         panelRedondeado7.setColorFondo(new java.awt.Color(255, 255, 255));
         panelRedondeado7.setPreferredSize(new java.awt.Dimension(300, 100));
-        panelRedondeado7.setLayout(new java.awt.GridLayout());
+        panelRedondeado7.setLayout(new java.awt.GridLayout(1, 0));
 
         panelEventos.setBackground(new java.awt.Color(207, 255, 187));
         panelEventos.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
