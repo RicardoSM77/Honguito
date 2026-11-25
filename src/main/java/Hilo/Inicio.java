@@ -1,69 +1,105 @@
-package com.mycompany.hilo;
+package Hilo;
 
-import java.util.concurrent.ThreadLocalRandom;
+import Motor_Log.Logica;
+import java.util.Objects;
 
 public class Inicio implements Runnable {
+    private static final long INTERVALO_MS = 250;
 
-    private final double tempInicial;
-    private final double humedadInicial;
-    private final double velInicial;
+    private final Logica logica;
     private final Pausa pausa;
+    private final double temperatura;
+    private final double humedad;
 
-    private double temp;
-    private double humedad;
-    private double vel;
-    private double dt;
-    private int iteracion;
-    private volatile boolean activo = true;
+    // El monitor de pausa serializa los avances, el reinicio y la detención.
+    private double velocidad;
+    private double dias;
+    private long reinicios;
+    private boolean activo = true;
+    private Thread hilo;
 
-    public Inicio(double temp, double humedad, double vel, Pausa pausa) {
-        this.tempInicial = temp;
-        this.humedadInicial = humedad;
-        this.velInicial = vel;
-        this.pausa = pausa;
-        reiniciar();
+    public Inicio(Logica logica, double temperatura, double humedad, double velocidad, Pausa pausa) {
+        this.logica = Objects.requireNonNull(logica);
+        this.pausa = Objects.requireNonNull(pausa);
+        logica.calcular(temperatura, humedad);
+        this.temperatura = temperatura;
+        this.humedad = humedad;
+        setVelocidad(velocidad);
     }
 
-    /**
-     * Devuelve el estado a los valores iniciales (seguro de llamar desde otro
-     * hilo).
-     */
-    public synchronized void reiniciar() {
-        this.temp = tempInicial;
-        this.humedad = humedadInicial;
-        this.vel = velInicial;
-        this.dt = 0;
-        this.iteracion = 0;
+    public void setVelocidad(double velocidad) {
+        if (!Double.isFinite(velocidad) || velocidad < 1 || velocidad > 5) {
+            throw new IllegalArgumentException("La velocidad debe estar entre x1 y x5.");
+        }
+        synchronized (pausa) {
+            this.velocidad = velocidad;
+        }
+    }
+
+    public void reiniciar() {
+        synchronized (pausa) {
+            logica.reiniciar();
+            dias = 0;
+            reinicios++;
+        }
     }
 
     public void detener() {
-        activo = false;
+        synchronized (pausa) {
+            activo = false;
+            if (hilo != null) {
+                hilo.interrupt();
+            }
+        }
     }
 
     @Override
     public void run() {
+        synchronized (pausa) {
+            if (!activo || hilo != null) {
+                return;
+            }
+            hilo = Thread.currentThread();
+        }
         try {
-            while (activo && !Thread.currentThread().isInterrupted()) {
-                // Si está pausado, el hilo se queda aquí hasta que lo reanuden
-                pausa.esperarSiEstaPausado();
-
-                synchronized (this) {
-                    iteracion++;
-                    dt = vel * 0.05;
-                    temp += ThreadLocalRandom.current().nextDouble(-0.5, 0.5) * dt;
-                    humedad += ThreadLocalRandom.current().nextDouble(-1.0, 1.0) * dt;
-                    System.out.printf("[Inicio] it=%d dt=%.3f temp=%.2f humedad=%.2f%n",
-                            iteracion, dt, temp, humedad);
+            while (!Thread.currentThread().isInterrupted()) {
+                long revisionPausa;
+                long revisionReinicio;
+                synchronized (pausa) {
+                    if (!activo) {
+                        return;
+                    }
+                    pausa.esperarSiEstaPausado();
+                    revisionPausa = pausa.getRevision();
+                    revisionReinicio = reinicios;
                 }
-                Thread.sleep(500);
+
+                Thread.sleep(INTERVALO_MS);
+
+                synchronized (pausa) {
+                    // Descarta un paso pendiente si se pausó o reinició durante la espera.
+                    if (activo && revisionPausa == pausa.getRevision() && revisionReinicio == reinicios) {
+                        double dt = velocidad * INTERVALO_MS / 1000.0;
+                        logica.crecimiento(dt, humedad, temperatura);
+                        dias += dt;
+                    }
+                }
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+        } finally {
+            synchronized (pausa) {
+                hilo = null;
+            }
         }
-        System.out.println("[Inicio] terminado");
     }
 
-    public synchronized double getDt() {
-        return dt;
+    public Estado getEstado() {
+        synchronized (pausa) {
+            return new Estado(dias, logica.getM(), logica.getCapacidad(), temperatura, humedad);
+        }
+    }
+
+    public record Estado(double dias, double masa, double capacidad, double temperatura, double humedad) {
     }
 }

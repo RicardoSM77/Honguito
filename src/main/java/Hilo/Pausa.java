@@ -1,39 +1,32 @@
-
-package com.mycompany.hilo;
-
-import java.util.concurrent.ThreadLocalRandom;
-
+package Hilo;
 
 public class Pausa {
-private final Object lock = new Object();
-    private boolean pausado = false;
+    private boolean pausado;
+    private long revision;
 
-    public void pausar() {
-        synchronized (lock) {
+    public synchronized void pausar() {
+        if (!pausado) {
             pausado = true;
+            revision++;
         }
     }
 
-    public void reanudar() {
-        synchronized (lock) {
-            pausado = false;
-            lock.notifyAll();
+    public synchronized void reanudar() {
+        pausado = false;
+        notifyAll();
+    }
+
+    public synchronized void esperarSiEstaPausado() throws InterruptedException {
+        while (pausado) {
+            wait();
         }
     }
 
-    /** Bloquea el hilo que la llame mientras esté pausado. */
-    public void esperarSiEstaPausado() throws InterruptedException {
-        synchronized (lock) {
-            while (pausado) {
-                lock.wait();
-            }
-        }
+    public synchronized boolean isPausado() {
+        return pausado;
     }
 
-    public boolean isPausado() {
-        synchronized (lock) {
-            return pausado;
-        }
+    synchronized long getRevision() {
+        return revision;
     }
-
 }
