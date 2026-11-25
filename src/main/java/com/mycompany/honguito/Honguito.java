@@ -1,6 +1,7 @@
 
 package com.mycompany.honguito;
-import Guis.*;
+import Guis.Principal;
+import javax.swing.SwingUtilities;
 /**
  *
  * @author ricardo
@@ -8,7 +9,6 @@ import Guis.*;
 public class Honguito {
 
     public static void main(String[] args) {
-        Principal prin=new Principal();
-        prin.setVisible(true);
+        SwingUtilities.invokeLater(() -> new Principal().setVisible(true));
     }
 }

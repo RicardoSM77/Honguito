@@ -1,28 +1,223 @@
 package Guis;
+import Hilo.Inicio;
+import Hilo.Pausa;
+import Hilo.Reiniciar;
+import Motor_Log.Logica;
+import Panel.EscenaCrecimiento;
+import Panel.FondoEscalable;
 import Panel.PanelRedondeado;
-import java.awt.Component;
-import java.awt.Graphics;
-import java.awt.Rectangle;
+import Panel.SpriteHonguito;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Graphics2D;
+import java.awt.GridLayout;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.swing.*;
 
 
 public class Principal extends javax.swing.JFrame {
 
- 
+    private static final int[] HITOS_BIOMASA = {25, 50, 75, 90, 99};
+    private final Timer refresco = new Timer(250, e -> mostrarEstado());
+    private final EscenaCrecimiento escenaCrecimiento;
+    private Inicio simulacion;
+    private Pausa pausa;
+    private Configuracion configuracion = new Configuracion(1, 10, 18, 90);
+    private double factorAmbiental;
+    private int siguienteHito;
+    private boolean crecimientoRegistrado;
+
+    private record Configuracion(double masaInicial, double capacidad, double temperatura, double humedad) {
+    }
+
     public Principal() {
         initComponents();
+        escenaCrecimiento = new EscenaCrecimiento((ImageIcon) jLabel8.getIcon());
+        panelRedondeado2.remove(jLabel8);
+        panelRedondeado2.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+        panelRedondeado2.setLayout(new BorderLayout());
+        panelRedondeado2.add(escenaCrecimiento, BorderLayout.CENTER);
         dibujarHonguitosEnMapa();
-        barraSaludHongo.setValue(000);
-        lblPorcentajeHongo.setText(
-        barraSaludHongo.getValue() + "%");
+        ajustarColumnaDerecha();
+        barraSaludHongo.getAccessibleContext().setAccessibleName("Biomasa respecto a la capacidad");
+        lblPorcentajeHongo.setText("—");
+        jLabel5.setText("0 días");
+        jLabel31.setText("—");
+        jLabel33.setText("—");
+        jLabel44.setText("—");
+        jLabel47.setText("—");
         ImageIcon arreiba=new ImageIcon(getClass().getResource("/Hongo60x60.png"));
         lblarriba.setIcon(arreiba);
+
+        txtEventos.setEditable(false);
+        jButton1.addActionListener(e -> iniciarOReanudar());
+        jButton2.addActionListener(e -> {
+            pausa.pausar();
+            refresco.stop();
+            mostrarEstado();
+            agregarEvento("Simulación pausada.");
+            actualizarControles();
+        });
+        jButton3.addActionListener(e -> {
+            new Reiniciar(simulacion).run();
+            agregarEvento(0, "Simulación reiniciada.");
+            registrarInicioHongo();
+            mostrarEstado();
+        });
+        sliderVelocidad.addChangeListener(e -> {
+            int velocidad = sliderVelocidad.getValue();
+            jLabel19.setText("x" + velocidad);
+            if (simulacion != null) {
+                simulacion.setVelocidad(velocidad);
+            }
+        });
+
+        jMenu1.setText("Simulación");
+        JMenuItem itemConfigurar = new JMenuItem("Configurar simulación…");
+        itemConfigurar.addActionListener(e -> configurarSimulacion());
+        jMenu1.add(itemConfigurar);
+        actualizarControles();
+        pack();
+    }
+
+    private void iniciarOReanudar() {
+        if (simulacion == null) {
+            configurarSimulacion();
+        } else if (pausa.isPausado()) {
+            pausa.reanudar();
+            refresco.start();
+            agregarEvento("Simulación reanudada.");
+            actualizarControles();
+        }
+    }
+
+    private void configurarSimulacion() {
+        JTextField masa = new JTextField(Double.toString(configuracion.masaInicial()), 10);
+        JTextField capacidad = new JTextField(Double.toString(configuracion.capacidad()), 10);
+        JTextField temperatura = new JTextField(Double.toString(configuracion.temperatura()), 10);
+        JTextField humedad = new JTextField(Double.toString(configuracion.humedad()), 10);
+        JPanel campos = new JPanel(new GridLayout(0, 2, 8, 6));
+        campos.add(new JLabel("Masa inicial (kg):"));
+        campos.add(masa);
+        campos.add(new JLabel("Capacidad máxima (kg):"));
+        campos.add(capacidad);
+        campos.add(new JLabel("Temperatura (°C):"));
+        campos.add(temperatura);
+        campos.add(new JLabel("Humedad (%):"));
+        campos.add(humedad);
+
+        while (JOptionPane.showConfirmDialog(this, campos, "Configurar simulación",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
+            try {
+                Configuracion nueva = new Configuracion(leerNumero(masa), leerNumero(capacidad),
+                        leerNumero(temperatura), leerNumero(humedad));
+                Pausa nuevaPausa = new Pausa();
+                Logica motor = new Logica(nueva.masaInicial(), nueva.capacidad());
+                Inicio nuevaSimulacion = new Inicio(motor,
+                        nueva.temperatura(), nueva.humedad(), sliderVelocidad.getValue(), nuevaPausa);
+                if (simulacion != null) {
+                    simulacion.detener();
+                }
+                configuracion = nueva;
+                factorAmbiental = motor.calcular(nueva.temperatura(), nueva.humedad());
+                simulacion = nuevaSimulacion;
+                pausa = nuevaPausa;
+                jLabel44.setText(String.format("%.4g kg", nueva.masaInicial()));
+                jLabel47.setText(String.format("%.4g kg", nueva.capacidad()));
+                txtEventos.setText("");
+                agregarEvento(0, "Simulación iniciada.");
+                registrarInicioHongo();
+                mostrarEstado();
+                actualizarControles();
+
+                Thread hilo = new Thread(simulacion, "honguito-simulacion");
+                hilo.setDaemon(true);
+                hilo.start();
+                refresco.start();
+                return;
+            } catch (NumberFormatException ex) {
+                mostrarErrorConfiguracion("Introduce un número en cada campo (puedes usar coma o punto decimal).");
+            } catch (IllegalArgumentException ex) {
+                mostrarErrorConfiguracion(ex.getMessage());
+            }
+        }
+    }
+
+    private static double leerNumero(JTextField campo) {
+        return Double.parseDouble(campo.getText().trim().replace(',', '.'));
+    }
+
+    private void mostrarErrorConfiguracion(String mensaje) {
+        JOptionPane.showMessageDialog(this, mensaje, "Datos no válidos", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private void actualizarControles() {
+        boolean iniciada = simulacion != null;
+        boolean pausada = iniciada && pausa.isPausado();
+        jButton1.setText(pausada ? "Reanudar" : "Inicio");
+        jButton1.setEnabled(!iniciada || pausada);
+        jButton2.setEnabled(iniciada && !pausada);
+        jButton3.setEnabled(iniciada);
+    }
+
+    private void mostrarEstado() {
+        if (simulacion == null) {
+            return;
+        }
+        Inicio.Estado estado = simulacion.getEstado();
+        double fraccion = estado.masa() / estado.capacidad();
+        escenaCrecimiento.setFraccionDeCapacidad(fraccion);
+        int porcentaje = (int) Math.round(100 * fraccion);
+        barraSaludHongo.setValue(porcentaje);
+        lblPorcentajeHongo.setText(String.format("%d%% · %.4g kg", porcentaje, estado.masa()));
+        jLabel5.setText(String.format("%.2f días", estado.dias()));
+        jLabel31.setText(String.format("%.4g °C", estado.temperatura()));
+        jLabel33.setText(String.format("%.4g %%", estado.humedad()));
+        registrarCrecimiento(estado, fraccion);
+    }
+
+    private void registrarInicioHongo() {
+        double masaInicial = configuracion.masaInicial();
+        double capacidad = configuracion.capacidad();
+        double fraccion = masaInicial / capacidad;
+        siguienteHito = 0;
+        crecimientoRegistrado = false;
+        while (siguienteHito < HITOS_BIOMASA.length && fraccion >= HITOS_BIOMASA[siguienteHito] / 100.0) {
+            siguienteHito++;
+        }
+
+        agregarEvento(0, String.format("Hongo: biomasa inicial de %.4g kg.", masaInicial));
+        if (masaInicial == capacidad) {
+            agregarEvento(0, "Hongo: la biomasa inicial ya está en la capacidad máxima.");
+        } else if (factorAmbiental == 0) {
+            agregarEvento(0, "Hongo: la combinación de temperatura y humedad no permite el crecimiento.");
+        }
+    }
+
+    private void registrarCrecimiento(Inicio.Estado estado, double fraccion) {
+        if (!crecimientoRegistrado && estado.masa() > configuracion.masaInicial()) {
+            crecimientoRegistrado = true;
+            agregarEvento(estado.dias(), String.format("Hongo: comenzó a crecer. Biomasa actual: %.4g kg.", estado.masa()));
+        }
+        while (siguienteHito < HITOS_BIOMASA.length && fraccion >= HITOS_BIOMASA[siguienteHito] / 100.0) {
+            int hito = HITOS_BIOMASA[siguienteHito++];
+            agregarEvento(estado.dias(), String.format("Hongo: alcanzó el %d %% de la capacidad. Biomasa actual: %.4g kg.",
+                    hito, estado.masa()));
+        }
+    }
+
+    @Override
+    public void dispose() {
+        refresco.stop();
+        if (simulacion != null) {
+            simulacion.detener();
+        }
+        super.dispose();
     }
 
     private void dibujarHonguitosEnMapa() {
-        Icon mapa = jLabel21.getIcon();
-        ImageIcon honguito = new ImageIcon(getClass().getResource("/honguito_cafe.png"));
+        ImageIcon mapa = (ImageIcon) jLabel21.getIcon();
+        SpriteHonguito honguito = new SpriteHonguito();
         int columnas = 2;
         int filas = 4;
         int tamanoMaximo = 28;
@@ -33,53 +228,59 @@ public class Principal extends javax.swing.JFrame {
             posicion[1] = azar.nextDouble();
         }
 
-        jLabel21.setIcon(new Icon() {
+        FondoEscalable mapaEscalable = new FondoEscalable(mapa, 0.5, 0.5) {
             @Override
-            public int getIconWidth() {
-                return mapa.getIconWidth();
-            }
-
-            @Override
-            public int getIconHeight() {
-                return mapa.getIconHeight();
-            }
-
-            @Override
-            public void paintIcon(Component componente, Graphics g, int x, int y) {
-                mapa.paintIcon(componente, g, x, y);
-                Rectangle area = new Rectangle(x, y, getIconWidth(), getIconHeight())
-                        .intersection(new Rectangle(componente.getWidth(), componente.getHeight()));
-                int anchoZona = area.width / columnas;
-                int altoZona = area.height / filas;
-                int limite = Math.min(tamanoMaximo, Math.min(anchoZona, altoZona));
+            protected void pintarPrimerPlano(Graphics2D g2) {
+                int anchoZona = getWidth() / columnas;
+                int altoZona = getHeight() / filas;
+                int margen = 4;
+                int limite = Math.min(tamanoMaximo, Math.min(anchoZona, altoZona) - 2 * margen);
                 if (limite <= 0) {
                     return;
                 }
 
-                double escala = (double) limite / Math.max(honguito.getIconWidth(), honguito.getIconHeight());
-                int ancho = Math.max(1, (int) Math.round(honguito.getIconWidth() * escala));
-                int alto = Math.max(1, (int) Math.round(honguito.getIconHeight() * escala));
+                double proporcion = honguito.getProporcion();
+                int ancho = Math.max(1, (int) Math.round(limite * Math.min(1, proporcion)));
+                int alto = Math.max(1, (int) Math.round(limite / Math.max(1, proporcion)));
                 // Un honguito por zona para repartirlos sin superponerlos.
                 for (int i = 0; i < posiciones.length; i++) {
-                    int px = area.x + (i % columnas) * anchoZona
-                            + (int) Math.round(posiciones[i][0] * (anchoZona - ancho));
-                    int py = area.y + (i / columnas) * altoZona
-                            + (int) Math.round(posiciones[i][1] * (altoZona - alto));
-                    g.drawImage(honguito.getImage(), px, py, ancho, alto, componente);
+                    int px = (i % columnas) * anchoZona + margen
+                            + (int) Math.round(posiciones[i][0] * (anchoZona - ancho - 2 * margen));
+                    int py = (i / columnas) * altoZona + margen
+                            + (int) Math.round(posiciones[i][1] * (altoZona - alto - 2 * margen));
+                    honguito.dibujar(g2, px, py, ancho, alto, 1);
                 }
             }
-        });
+        };
+        mapaEscalable.setPreferredSize(new Dimension(mapa.getIconWidth(), 0));
+        panelRedondeado6.remove(jLabel21);
+        panelRedondeado6.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+        jPanel16.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+        panelRedondeado6.add(mapaEscalable, BorderLayout.CENTER);
     }
     
-    private void agregarEvento(int dia, String mensaje) {
+    private void ajustarColumnaDerecha() {
+        panelCentro.remove(panelDerecho);
+        JScrollPane desplazamiento = new JScrollPane(panelDerecho,
+                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        desplazamiento.setBorder(BorderFactory.createEmptyBorder());
+        desplazamiento.setOpaque(false);
+        desplazamiento.getViewport().setOpaque(false);
+        desplazamiento.getVerticalScrollBar().setUnitIncrement(16);
+        Dimension preferido = panelDerecho.getPreferredSize();
+        int anchoBarra = desplazamiento.getVerticalScrollBar().getPreferredSize().width;
+        desplazamiento.setPreferredSize(new Dimension(preferido.width + anchoBarra, 0));
+        panelCentro.add(desplazamiento, BorderLayout.LINE_END);
+    }
 
-        txtEventos.append(
-            "Día " + dia + ": " + mensaje + "\n"
-        );
+    private void agregarEvento(String mensaje) {
+        agregarEvento(simulacion.getEstado().dias(), mensaje);
+    }
 
-        txtEventos.setCaretPosition(
-        txtEventos.getDocument().getLength()
-        );
+    private void agregarEvento(double dias, String mensaje) {
+        txtEventos.append(String.format("Día %.2f: %s%n", dias, mensaje));
+        txtEventos.setCaretPosition(txtEventos.getDocument().getLength());
     }
 
 
@@ -163,22 +364,26 @@ public class Principal extends javax.swing.JFrame {
         txtEventos = new javax.swing.JTextArea();
         jMenuBar1 = new javax.swing.JMenuBar();
         jMenu1 = new javax.swing.JMenu();
-        jMenu2 = new javax.swing.JMenu();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
+        panelPrincipal.setBackground(new java.awt.Color(177, 250, 146));
+        panelPrincipal.setBorder(javax.swing.BorderFactory.createEmptyBorder(4, 4, 4, 4));
         panelPrincipal.setLayout(new java.awt.GridBagLayout());
 
         panelCentro.setBackground(new java.awt.Color(236, 255, 211));
         panelCentro.setForeground(new java.awt.Color(177, 250, 146));
+        panelCentro.setOpaque(false);
         panelCentro.setLayout(new java.awt.BorderLayout(5, 5));
 
         panelTitulo.setBackground(new java.awt.Color(255, 255, 255));
+        panelTitulo.setOpaque(false);
         panelTitulo.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado1.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado1.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 8, 8));
         panelRedondeado1.setColorFondo(new java.awt.Color(255, 255, 255));
+        panelRedondeado1.setOpaque(true);
         panelRedondeado1.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT));
 
         lblarriba.setBackground(new java.awt.Color(255, 255, 255));
@@ -193,9 +398,11 @@ public class Principal extends javax.swing.JFrame {
         panelCentro.add(panelTitulo, java.awt.BorderLayout.NORTH);
 
         panelIzquierdo.setBackground(new java.awt.Color(255, 255, 255));
+        panelIzquierdo.setOpaque(false);
         panelIzquierdo.setLayout(new java.awt.BorderLayout(5, 5));
 
         panelTiempo.setBackground(new java.awt.Color(236, 255, 211));
+        panelTiempo.setOpaque(false);
         panelTiempo.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado5.setBackground(new java.awt.Color(207, 255, 187));
@@ -235,6 +442,7 @@ public class Principal extends javax.swing.JFrame {
 
         panelMapa.setBackground(new java.awt.Color(236, 255, 211));
         panelMapa.setForeground(new java.awt.Color(0, 0, 0));
+        panelMapa.setOpaque(false);
         panelMapa.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado6.setBackground(new java.awt.Color(207, 255, 187));
@@ -270,12 +478,13 @@ public class Principal extends javax.swing.JFrame {
         panelCentro.add(panelIzquierdo, java.awt.BorderLayout.WEST);
 
         panelCentral.setBackground(new java.awt.Color(236, 255, 211));
-        panelCentral.setPreferredSize(new java.awt.Dimension(650, 650));
+        panelCentral.setOpaque(false);
+        panelCentral.setPreferredSize(new java.awt.Dimension(650, 500));
         panelCentral.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado2.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado2.setColorFondo(new java.awt.Color(255, 255, 255));
-        panelRedondeado2.setPreferredSize(new java.awt.Dimension(650, 650));
+        panelRedondeado2.setPreferredSize(new java.awt.Dimension(650, 500));
 
         jLabel8.setIcon(new javax.swing.ImageIcon(getClass().getResource("/Tronco caído en bosque soleado.png"))); // NOI18N
         panelRedondeado2.add(jLabel8);
@@ -289,6 +498,7 @@ public class Principal extends javax.swing.JFrame {
         panelDerecho.setLayout(new java.awt.BorderLayout(0, 8));
 
         panelEstado.setBackground(new java.awt.Color(236, 255, 211));
+        panelEstado.setOpaque(false);
         panelEstado.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado13.setBackground(new java.awt.Color(207, 255, 187));
@@ -303,11 +513,9 @@ public class Principal extends javax.swing.JFrame {
         panelRedondeado13.add(jLabel7, java.awt.BorderLayout.NORTH);
 
         jPanel18.setOpaque(false);
-        jPanel18.setLayout(new java.awt.BorderLayout());
+        jPanel18.setLayout(new java.awt.BorderLayout(8, 0));
 
-        barraSaludHongo.setForeground(new java.awt.Color(255, 255, 255));
-        barraSaludHongo.setValue(0);
-        barraSaludHongo.setPreferredSize(new java.awt.Dimension(150, 26));
+        barraSaludHongo.setPreferredSize(new java.awt.Dimension(150, 28));
         jPanel18.add(barraSaludHongo, java.awt.BorderLayout.CENTER);
 
         lblPorcentajeHongo.setBackground(new java.awt.Color(255, 255, 255));
@@ -323,6 +531,7 @@ public class Principal extends javax.swing.JFrame {
         panelDerecho.add(panelEstado, java.awt.BorderLayout.PAGE_START);
 
         panelCondiciones.setBackground(new java.awt.Color(236, 255, 211));
+        panelCondiciones.setOpaque(false);
 
         panelRedondeado12.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado12.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
@@ -481,10 +690,11 @@ public class Principal extends javax.swing.JFrame {
         gridBagConstraints.gridy = 0;
         gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
         gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.weighty = 0.6;
+        gridBagConstraints.weighty = 0.55;
         panelPrincipal.add(panelCentro, gridBagConstraints);
 
         panelAbajo.setBackground(new java.awt.Color(255, 255, 255));
+        panelAbajo.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 0, 0, 0));
         panelAbajo.setOpaque(false);
         panelAbajo.setLayout(new java.awt.GridLayout(1, 0));
 
@@ -508,6 +718,7 @@ public class Principal extends javax.swing.JFrame {
 
         panelRedondeado4.add(panelRedondeado8);
 
+        jPanel2.setOpaque(false);
         jPanel2.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado9.setBackground(new java.awt.Color(207, 255, 187));
@@ -546,41 +757,41 @@ public class Principal extends javax.swing.JFrame {
         panelRedondeado11.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 8, 0, 8));
         panelRedondeado11.setColorFondo(new java.awt.Color(255, 255, 255));
         panelRedondeado11.setPreferredSize(new java.awt.Dimension(300, 100));
-        panelRedondeado11.setLayout(new java.awt.GridLayout(1, 3));
+        panelRedondeado11.setLayout(new java.awt.BorderLayout(8, 0));
 
         jLabel2.setFont(new java.awt.Font("Nunito", 1, 18)); // NOI18N
         jLabel2.setForeground(new java.awt.Color(105, 84, 80));
         jLabel2.setText("Velocidad:");
-        panelRedondeado11.add(jLabel2);
+        panelRedondeado11.add(jLabel2, java.awt.BorderLayout.LINE_START);
 
-        sliderVelocidad.setBackground(new java.awt.Color(255, 255, 255));
         sliderVelocidad.setFont(new java.awt.Font("Nunito", 0, 12)); // NOI18N
         sliderVelocidad.setForeground(new java.awt.Color(105, 84, 80));
         sliderVelocidad.setMajorTickSpacing(1);
         sliderVelocidad.setMaximum(5);
         sliderVelocidad.setMinimum(1);
+        sliderVelocidad.setPaintTicks(true);
         sliderVelocidad.setValue(1);
-        panelRedondeado11.add(sliderVelocidad);
+        panelRedondeado11.add(sliderVelocidad, java.awt.BorderLayout.CENTER);
 
         jLabel19.setFont(new java.awt.Font("Nunito", 1, 18)); // NOI18N
         jLabel19.setForeground(new java.awt.Color(105, 84, 80));
-        jLabel19.setText("X1");
-        panelRedondeado11.add(jLabel19);
+        jLabel19.setText("x1");
+        panelRedondeado11.add(jLabel19, java.awt.BorderLayout.LINE_END);
 
         panelRedondeado4.add(panelRedondeado11);
 
         panelAbajo.add(panelRedondeado4);
 
         panelRedondeado7.setBackground(new java.awt.Color(207, 255, 187));
-        panelRedondeado7.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        panelRedondeado7.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 8, 8));
         panelRedondeado7.setColorFondo(new java.awt.Color(255, 255, 255));
-        panelRedondeado7.setPreferredSize(new java.awt.Dimension(300, 100));
+        panelRedondeado7.setMinimumSize(new java.awt.Dimension(280, 150));
+        panelRedondeado7.setPreferredSize(new java.awt.Dimension(300, 180));
         panelRedondeado7.setLayout(new java.awt.GridLayout(1, 0));
 
         panelEventos.setBackground(new java.awt.Color(207, 255, 187));
-        panelEventos.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        panelEventos.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 8, 8));
         panelEventos.setColorFondo(new java.awt.Color(255, 255, 255));
-        panelEventos.setPreferredSize(new java.awt.Dimension(300, 100));
         panelEventos.setLayout(new java.awt.BorderLayout());
 
         jLabel20.setFont(new java.awt.Font("Nunito", 1, 22)); // NOI18N
@@ -590,7 +801,9 @@ public class Principal extends javax.swing.JFrame {
         panelEventos.add(jLabel20, java.awt.BorderLayout.NORTH);
 
         txtEventos.setColumns(20);
-        txtEventos.setRows(5);
+        txtEventos.setLineWrap(true);
+        txtEventos.setRows(7);
+        txtEventos.setWrapStyleWord(true);
         jScrollPane1.setViewportView(txtEventos);
 
         panelEventos.add(jScrollPane1, java.awt.BorderLayout.CENTER);
@@ -604,16 +817,13 @@ public class Principal extends javax.swing.JFrame {
         gridBagConstraints.gridy = 1;
         gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
         gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.weighty = 0.4;
+        gridBagConstraints.weighty = 0.45;
         panelPrincipal.add(panelAbajo, gridBagConstraints);
 
         getContentPane().add(panelPrincipal, java.awt.BorderLayout.CENTER);
 
         jMenu1.setText("File");
         jMenuBar1.add(jMenu1);
-
-        jMenu2.setText("Edit");
-        jMenuBar1.add(jMenu2);
 
         setJMenuBar(jMenuBar1);
 
@@ -687,7 +897,6 @@ public class Principal extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel7;
     private javax.swing.JLabel jLabel8;
     private javax.swing.JMenu jMenu1;
-    private javax.swing.JMenu jMenu2;
     private javax.swing.JMenuBar jMenuBar1;
     private javax.swing.JPanel jPanel13;
     private javax.swing.JPanel jPanel14;
