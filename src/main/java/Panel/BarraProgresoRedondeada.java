@@ -5,6 +5,9 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.geom.Area;
+import java.awt.geom.Rectangle2D;
+import java.awt.geom.RoundRectangle2D;
 import javax.swing.JProgressBar;
 
 public class BarraProgresoRedondeada extends JProgressBar {
@@ -18,7 +21,7 @@ public class BarraProgresoRedondeada extends JProgressBar {
 
     public BarraProgresoRedondeada() {
         super(0, 100);
-        setValue(75);
+        setValue(0);
         setOpaque(false);
         setBorderPainted(false);
         setStringPainted(false);
@@ -45,9 +48,10 @@ public class BarraProgresoRedondeada extends JProgressBar {
         int w = Math.max(0, ancho - 2 * margen - 1);
         int h = Math.max(0, alto - 2 * margen - 1);
 
-        // Fondo de la barra
+        int arco = Math.min(radio, h);
+        RoundRectangle2D pista = new RoundRectangle2D.Double(x, y, w, h, arco, arco);
         g2.setColor(colorFondo);
-        g2.fillRoundRect(x, y, w, h, radio, radio);
+        g2.fill(pista);
 
         // Calcular porcentaje
         double porcentaje =
@@ -62,22 +66,17 @@ public class BarraProgresoRedondeada extends JProgressBar {
         int progreso = (int) Math.round(w * porcentaje);
 
         if (progreso > 0) {
-            java.awt.Shape forma =
-                new java.awt.geom.RoundRectangle2D.Double(
-                    x, y, w, h, radio, radio
-                );
-
-            g2.setClip(forma);
+            Area relleno = new Area(pista);
+            relleno.intersect(new Area(new Rectangle2D.Double(x, y, progreso, h)));
             g2.setColor(colorProgreso);
-            g2.fillRect(x, y, progreso, h);
-            g2.setClip(null);
+            g2.fill(relleno);
         }
 
         // Borde exterior
         if (grosor > 0) {
             g2.setColor(colorBorde);
             g2.setStroke(new BasicStroke(grosor));
-            g2.drawRoundRect(x, y, w, h, radio, radio);
+            g2.draw(pista);
         }
 
         g2.dispose();
