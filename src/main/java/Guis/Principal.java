@@ -1,5 +1,9 @@
 package Guis;
 import Panel.PanelRedondeado;
+import java.awt.Component;
+import java.awt.Graphics;
+import java.awt.Rectangle;
+import java.util.concurrent.ThreadLocalRandom;
 import javax.swing.*;
 
 
@@ -8,11 +12,63 @@ public class Principal extends javax.swing.JFrame {
  
     public Principal() {
         initComponents();
+        dibujarHonguitosEnMapa();
         barraSaludHongo.setValue(000);
         lblPorcentajeHongo.setText(
         barraSaludHongo.getValue() + "%");
         ImageIcon arreiba=new ImageIcon(getClass().getResource("/Hongo60x60.png"));
         lblarriba.setIcon(arreiba);
+    }
+
+    private void dibujarHonguitosEnMapa() {
+        Icon mapa = jLabel21.getIcon();
+        ImageIcon honguito = new ImageIcon(getClass().getResource("/honguito_cafe.png"));
+        int columnas = 2;
+        int filas = 4;
+        int tamanoMaximo = 28;
+        double[][] posiciones = new double[columnas * filas][2];
+        ThreadLocalRandom azar = ThreadLocalRandom.current();
+        for (double[] posicion : posiciones) {
+            posicion[0] = azar.nextDouble();
+            posicion[1] = azar.nextDouble();
+        }
+
+        jLabel21.setIcon(new Icon() {
+            @Override
+            public int getIconWidth() {
+                return mapa.getIconWidth();
+            }
+
+            @Override
+            public int getIconHeight() {
+                return mapa.getIconHeight();
+            }
+
+            @Override
+            public void paintIcon(Component componente, Graphics g, int x, int y) {
+                mapa.paintIcon(componente, g, x, y);
+                Rectangle area = new Rectangle(x, y, getIconWidth(), getIconHeight())
+                        .intersection(new Rectangle(componente.getWidth(), componente.getHeight()));
+                int anchoZona = area.width / columnas;
+                int altoZona = area.height / filas;
+                int limite = Math.min(tamanoMaximo, Math.min(anchoZona, altoZona));
+                if (limite <= 0) {
+                    return;
+                }
+
+                double escala = (double) limite / Math.max(honguito.getIconWidth(), honguito.getIconHeight());
+                int ancho = Math.max(1, (int) Math.round(honguito.getIconWidth() * escala));
+                int alto = Math.max(1, (int) Math.round(honguito.getIconHeight() * escala));
+                // Un honguito por zona para repartirlos sin superponerlos.
+                for (int i = 0; i < posiciones.length; i++) {
+                    int px = area.x + (i % columnas) * anchoZona
+                            + (int) Math.round(posiciones[i][0] * (anchoZona - ancho));
+                    int py = area.y + (i / columnas) * altoZona
+                            + (int) Math.round(posiciones[i][1] * (altoZona - alto));
+                    g.drawImage(honguito.getImage(), px, py, ancho, alto, componente);
+                }
+            }
+        });
     }
     
     private void agregarEvento(int dia, String mensaje) {
@@ -53,6 +109,7 @@ public class Principal extends javax.swing.JFrame {
         jLabel21 = new javax.swing.JLabel();
         panelCentral = new javax.swing.JPanel();
         panelRedondeado2 = new Panel.PanelRedondeado();
+        jLabel8 = new javax.swing.JLabel();
         panelDerecho = new javax.swing.JPanel();
         panelEstado = new javax.swing.JPanel();
         panelRedondeado13 = new Panel.PanelRedondeado();
@@ -198,7 +255,12 @@ public class Principal extends javax.swing.JFrame {
 
         panelRedondeado6.add(jPanel16, java.awt.BorderLayout.NORTH);
 
-        jLabel21.setIcon(new javax.swing.ImageIcon(getClass().getResource("/Mapa de Bosque.png"))); // NOI18N
+        jLabel21.setIcon(new javax.swing.ImageIcon(getClass().getResource("/Mapa_256x564.png"))); // NOI18N
+        jLabel21.addComponentListener(new java.awt.event.ComponentAdapter() {
+            public void componentResized(java.awt.event.ComponentEvent evt) {
+                jLabel21ComponentResized(evt);
+            }
+        });
         panelRedondeado6.add(jLabel21, java.awt.BorderLayout.CENTER);
 
         panelMapa.add(panelRedondeado6);
@@ -212,9 +274,12 @@ public class Principal extends javax.swing.JFrame {
         panelCentral.setLayout(new java.awt.GridLayout(1, 0));
 
         panelRedondeado2.setBackground(new java.awt.Color(207, 255, 187));
-        panelRedondeado2.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
         panelRedondeado2.setColorFondo(new java.awt.Color(255, 255, 255));
         panelRedondeado2.setPreferredSize(new java.awt.Dimension(650, 650));
+
+        jLabel8.setIcon(new javax.swing.ImageIcon(getClass().getResource("/Tronco caído en bosque soleado.png"))); // NOI18N
+        panelRedondeado2.add(jLabel8);
+
         panelCentral.add(panelRedondeado2);
 
         panelCentro.add(panelCentral, java.awt.BorderLayout.CENTER);
@@ -555,6 +620,10 @@ public class Principal extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
+    private void jLabel21ComponentResized(java.awt.event.ComponentEvent evt) {//GEN-FIRST:event_jLabel21ComponentResized
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jLabel21ComponentResized
+
 
     public static void main(String args[]) {
         /* Set the Nimbus look and feel */
@@ -616,6 +685,7 @@ public class Principal extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel5;
     private javax.swing.JLabel jLabel6;
     private javax.swing.JLabel jLabel7;
+    private javax.swing.JLabel jLabel8;
     private javax.swing.JMenu jMenu1;
     private javax.swing.JMenu jMenu2;
     private javax.swing.JMenuBar jMenuBar1;
