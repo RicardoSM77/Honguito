@@ -8,11 +8,19 @@ import Panel.FondoEscalable;
 import Panel.PanelRedondeado;
 import Panel.SpriteHonguito;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.plaf.basic.BasicSliderUI;
 
 
 public class Principal extends javax.swing.JFrame {
@@ -32,6 +40,45 @@ public class Principal extends javax.swing.JFrame {
 
     public Principal() {
         initComponents();
+        sliderVelocidad.setUI(new BasicSliderUI(sliderVelocidad) {
+            @Override
+            public void paintTrack(Graphics g) {
+                pintarRedondeado(g, new Color(205, 222, 192),
+                        trackRect.x, trackRect.y + (trackRect.height - 6) / 2, trackRect.width, 6);
+            }
+
+            @Override
+            protected void paintMajorTickForHorizSlider(Graphics g, Rectangle tickBounds, int x) {
+                g.setColor(new Color(145, 166, 132));
+                super.paintMajorTickForHorizSlider(g, tickBounds, x);
+            }
+
+            @Override
+            public void paintThumb(Graphics g) {
+                int diametro = 12;
+                Color color = slider.hasFocus() ? new Color(57, 95, 46) : new Color(103, 147, 83);
+                pintarRedondeado(g, color, thumbRect.x + (thumbRect.width - diametro) / 2,
+                        thumbRect.y + (thumbRect.height - diametro) / 2, diametro, diametro);
+            }
+
+            @Override
+            public void paintFocus(Graphics g) {
+                // El cambio de color del mando indica el foco sin dibujar un borde.
+            }
+
+            private void pintarRedondeado(Graphics g, Color color, int x, int y, int ancho, int alto) {
+                Graphics2D dibujo = (Graphics2D) g.create();
+                try {
+                    dibujo.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    dibujo.setColor(color);
+                    dibujo.fillRoundRect(x, y, ancho, alto, alto, alto);
+                } finally {
+                    dibujo.dispose();
+                }
+            }
+        });
+        sliderVelocidad.setOpaque(false);
+        sliderVelocidad.setBorder(BorderFactory.createEmptyBorder(0, 3, 0, 3));
         escenaCrecimiento = new EscenaCrecimiento((ImageIcon) jLabel8.getIcon());
         panelRedondeado2.remove(jLabel8);
         panelRedondeado2.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
@@ -106,11 +153,35 @@ public class Principal extends javax.swing.JFrame {
         campos.add(new JLabel("Humedad (%):"));
         campos.add(humedad);
 
-        while (JOptionPane.showConfirmDialog(this, campos, "Configurar simulación",
+        Supplier<Configuracion> leerConfiguracion = () -> new Configuracion(leerNumero(masa), leerNumero(capacidad),
+                leerNumero(temperatura), leerNumero(humedad));
+        JLabel vistaPrevia = new JLabel();
+        Runnable actualizarVistaPrevia = () -> {
+            String mensaje;
+            try {
+                mensaje = describirCrecimiento(leerConfiguracion.get());
+            } catch (IllegalArgumentException ex) {
+                mensaje = "Ingresa valores válidos para ver la estimación de crecimiento.";
+            }
+            vistaPrevia.setText("<html><div style='width: 275px'>" + mensaje + "</div></html>");
+        };
+        DocumentListener cambios = new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { actualizarVistaPrevia.run(); }
+            @Override public void removeUpdate(DocumentEvent e) { actualizarVistaPrevia.run(); }
+            @Override public void changedUpdate(DocumentEvent e) { actualizarVistaPrevia.run(); }
+        };
+        for (JTextField campo : new JTextField[]{masa, capacidad, temperatura, humedad}) {
+            campo.getDocument().addDocumentListener(cambios);
+        }
+        actualizarVistaPrevia.run();
+        JPanel contenido = new JPanel(new BorderLayout(0, 10));
+        contenido.add(campos, BorderLayout.CENTER);
+        contenido.add(vistaPrevia, BorderLayout.SOUTH);
+
+        while (JOptionPane.showConfirmDialog(this, contenido, "Configurar simulación",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
             try {
-                Configuracion nueva = new Configuracion(leerNumero(masa), leerNumero(capacidad),
-                        leerNumero(temperatura), leerNumero(humedad));
+                Configuracion nueva = leerConfiguracion.get();
                 Pausa nuevaPausa = new Pausa();
                 Logica motor = new Logica(nueva.masaInicial(), nueva.capacidad());
                 Inicio nuevaSimulacion = new Inicio(motor,
@@ -141,6 +212,23 @@ public class Principal extends javax.swing.JFrame {
                 mostrarErrorConfiguracion(ex.getMessage());
             }
         }
+    }
+
+    private static String describirCrecimiento(Configuracion config) {
+        Logica modelo = new Logica(config.masaInicial(), config.capacidad());
+        double factor = modelo.calcular(config.temperatura(), config.humedad());
+        if (config.masaInicial() == config.capacidad()) {
+            return "Sin crecimiento: la masa inicial ya ocupa toda la capacidad.";
+        }
+        if (factor == 0) {
+            return "Sin crecimiento: la temperatura o la humedad anula la tasa. Prueba con 18 °C y 90 %.";
+        }
+        double aumento = modelo.crecimiento(1, config.humedad(), config.temperatura()) - config.masaInicial();
+        if (aumento == 0) {
+            return "El aumento del primer día es demasiado pequeño para representarlo con estos valores.";
+        }
+        return String.format("Factor ambiental: %.3g %% de la tasa base. Aumento el primer día simulado: +%.4g kg.",
+                100 * factor, aumento);
     }
 
     private static double leerNumero(JTextField campo) {
@@ -349,11 +437,10 @@ public class Principal extends javax.swing.JFrame {
         panelRedondeado8 = new Panel.PanelRedondeado();
         jLabel1 = new javax.swing.JLabel();
         jPanel2 = new javax.swing.JPanel();
-        panelRedondeado9 = new Panel.PanelRedondeado();
         jButton1 = new javax.swing.JButton();
         jButton2 = new javax.swing.JButton();
         jButton3 = new javax.swing.JButton();
-        panelRedondeado11 = new Panel.PanelRedondeado();
+        panelVelocidad = new javax.swing.JPanel();
         jLabel2 = new javax.swing.JLabel();
         sliderVelocidad = new javax.swing.JSlider();
         jLabel19 = new javax.swing.JLabel();
@@ -702,7 +789,7 @@ public class Principal extends javax.swing.JFrame {
         panelRedondeado4.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
         panelRedondeado4.setColorFondo(new java.awt.Color(255, 255, 255));
         panelRedondeado4.setPreferredSize(new java.awt.Dimension(300, 100));
-        panelRedondeado4.setLayout(new java.awt.GridLayout(3, 0));
+        panelRedondeado4.setLayout(new java.awt.GridLayout(3, 0, 0, 16));
 
         panelRedondeado8.setBackground(new java.awt.Color(207, 255, 187));
         panelRedondeado8.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 8, 0, 8));
@@ -719,12 +806,7 @@ public class Principal extends javax.swing.JFrame {
         panelRedondeado4.add(panelRedondeado8);
 
         jPanel2.setOpaque(false);
-        jPanel2.setLayout(new java.awt.GridLayout(1, 0));
-
-        panelRedondeado9.setBackground(new java.awt.Color(207, 255, 187));
-        panelRedondeado9.setColorFondo(new java.awt.Color(255, 255, 255));
-        panelRedondeado9.setPreferredSize(new java.awt.Dimension(300, 100));
-        panelRedondeado9.setLayout(new java.awt.GridLayout(1, 3, 16, 0));
+        jPanel2.setLayout(new java.awt.GridLayout(1, 3, 16, 0));
 
         jButton1.setBackground(new java.awt.Color(177, 250, 146));
         jButton1.setFont(new java.awt.Font("Nunito", 1, 18)); // NOI18N
@@ -732,7 +814,8 @@ public class Principal extends javax.swing.JFrame {
         jButton1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/Play.png"))); // NOI18N
         jButton1.setText("Inicio");
         jButton1.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(73, 230, 7), 2, true));
-        panelRedondeado9.add(jButton1);
+        jButton1.setFocusable(false);
+        jPanel2.add(jButton1);
 
         jButton2.setBackground(new java.awt.Color(253, 228, 210));
         jButton2.setFont(new java.awt.Font("Nunito", 1, 18)); // NOI18N
@@ -740,29 +823,28 @@ public class Principal extends javax.swing.JFrame {
         jButton2.setIcon(new javax.swing.ImageIcon(getClass().getResource("/Pausa.png"))); // NOI18N
         jButton2.setText("Pausa");
         jButton2.setToolTipText("");
-        panelRedondeado9.add(jButton2);
+        jButton2.setFocusable(false);
+        jPanel2.add(jButton2);
 
         jButton3.setBackground(new java.awt.Color(253, 228, 210));
         jButton3.setFont(new java.awt.Font("Nunito", 1, 18)); // NOI18N
         jButton3.setForeground(new java.awt.Color(105, 84, 80));
         jButton3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/Actualizar flecha.png"))); // NOI18N
         jButton3.setText("Reiniciar");
-        panelRedondeado9.add(jButton3);
-
-        jPanel2.add(panelRedondeado9);
+        jButton3.setFocusable(false);
+        jPanel2.add(jButton3);
 
         panelRedondeado4.add(jPanel2);
 
-        panelRedondeado11.setBackground(new java.awt.Color(207, 255, 187));
-        panelRedondeado11.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 8, 0, 8));
-        panelRedondeado11.setColorFondo(new java.awt.Color(255, 255, 255));
-        panelRedondeado11.setPreferredSize(new java.awt.Dimension(300, 100));
-        panelRedondeado11.setLayout(new java.awt.BorderLayout(8, 0));
+        panelVelocidad.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        panelVelocidad.setOpaque(false);
+        panelVelocidad.setPreferredSize(new java.awt.Dimension(300, 100));
+        panelVelocidad.setLayout(new java.awt.BorderLayout(8, 0));
 
         jLabel2.setFont(new java.awt.Font("Nunito", 1, 18)); // NOI18N
         jLabel2.setForeground(new java.awt.Color(105, 84, 80));
         jLabel2.setText("Velocidad:");
-        panelRedondeado11.add(jLabel2, java.awt.BorderLayout.LINE_START);
+        panelVelocidad.add(jLabel2, java.awt.BorderLayout.LINE_START);
 
         sliderVelocidad.setFont(new java.awt.Font("Nunito", 0, 12)); // NOI18N
         sliderVelocidad.setForeground(new java.awt.Color(105, 84, 80));
@@ -771,14 +853,15 @@ public class Principal extends javax.swing.JFrame {
         sliderVelocidad.setMinimum(1);
         sliderVelocidad.setPaintTicks(true);
         sliderVelocidad.setValue(1);
-        panelRedondeado11.add(sliderVelocidad, java.awt.BorderLayout.CENTER);
+        sliderVelocidad.setOpaque(false);
+        panelVelocidad.add(sliderVelocidad, java.awt.BorderLayout.CENTER);
 
         jLabel19.setFont(new java.awt.Font("Nunito", 1, 18)); // NOI18N
         jLabel19.setForeground(new java.awt.Color(105, 84, 80));
         jLabel19.setText("x1");
-        panelRedondeado11.add(jLabel19, java.awt.BorderLayout.LINE_END);
+        panelVelocidad.add(jLabel19, java.awt.BorderLayout.LINE_END);
 
-        panelRedondeado4.add(panelRedondeado11);
+        panelRedondeado4.add(panelVelocidad);
 
         panelAbajo.add(panelRedondeado4);
 
@@ -923,7 +1006,6 @@ public class Principal extends javax.swing.JFrame {
     private javax.swing.JPanel panelMapa;
     private javax.swing.JPanel panelPrincipal;
     private Panel.PanelRedondeado panelRedondeado1;
-    private Panel.PanelRedondeado panelRedondeado11;
     private Panel.PanelRedondeado panelRedondeado12;
     private Panel.PanelRedondeado panelRedondeado13;
     private Panel.PanelRedondeado panelRedondeado19;
@@ -937,9 +1019,9 @@ public class Principal extends javax.swing.JFrame {
     private Panel.PanelRedondeado panelRedondeado6;
     private Panel.PanelRedondeado panelRedondeado7;
     private Panel.PanelRedondeado panelRedondeado8;
-    private Panel.PanelRedondeado panelRedondeado9;
     private javax.swing.JPanel panelTiempo;
     private javax.swing.JPanel panelTitulo;
+    private javax.swing.JPanel panelVelocidad;
     private javax.swing.JSlider sliderVelocidad;
     private javax.swing.JTextArea txtEventos;
     // End of variables declaration//GEN-END:variables

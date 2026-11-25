@@ -17,6 +17,8 @@ Los campos aceptan punto o coma decimal. Con los valores propuestos, la biomasa 
 
 El deslizador **Velocidad** va de x1 a x5: a x1, un segundo de ejecución equivale aproximadamente a un día simulado; a x5, a cinco días. La temperatura y la humedad se mantienen constantes durante cada ejecución. El tiempo sigue avanzando aunque las condiciones impidan que crezca la masa.
 
+La configuración muestra una estimación del primer día simulado. En este modelo, el crecimiento es más rápido a **18 °C y 90 % de humedad**. La biomasa no aumenta a **8 °C o menos**, **28 °C o más**, o con **50 % de humedad o menos**. Cerca de esos límites, el aumento puede ser tan pequeño que la barra y el dibujo tarden en reflejarlo. El crecimiento también se desacelera al acercarse a la capacidad máxima.
+
 - **Pausa** congela el tiempo y la masa; **Reanudar** continúa desde ese punto.
 - **Reiniciar** vuelve al día cero y a la masa inicial, conservando la configuración y el estado de pausa.
 - **Simulación → Configurar simulación…** permite cambiar las entradas e iniciar otra ejecución.
